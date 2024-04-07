@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 1234
+    url: jdbc:mysql://localhost:3306/rainsun_prod_space
+  session:
+    timeout: 86400 # session 失效时间
+server:
+  port: 8080
+  servlet:
+    context-path: /api
