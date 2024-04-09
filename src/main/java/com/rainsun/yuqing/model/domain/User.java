@@ -81,7 +81,7 @@ public class User implements Serializable {
     private Integer userRole;
 
     /**
-     * 星球编号
+     * 朋友编号
      */
     private String planetCode;
 

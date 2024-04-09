@@ -129,7 +129,7 @@ public List<User> searchUserByTags(List<String> tagNameList){
 }
 ```
 
-2. 内存查询
+2. **内存查询**
 
 实现这种方法需要将 String 类型的 Json 描述转为对象（Json 序列化）
 
@@ -180,7 +180,7 @@ java json 序列化库有很多：
     }
 ```
 
-3. 优化
+3. **优化**
 
 - 内存查询可以多线程并发查询进行优化
 - 根据数据量选择查询方法
@@ -189,7 +189,291 @@ java json 序列化库有很多：
 
 
 
+# 生成接口文档
 
+Swagger pom 引入
+
+```xml
+<!--为了与 swagger 依赖的版本匹配，这里指定了版本-->
+<dependency>
+    <groupId>org.springframework.plugin</groupId>
+    <artifactId>spring-plugin-core</artifactId>
+    <version>2.0.0.RELEASE</version>
+</dependency>
+<!-- https://mvnrepository.com/artifact/io.springfox/springfox-swagger2 -->
+<dependency>
+   <groupId>io.springfox</groupId>
+   <artifactId>springfox-swagger2</artifactId>
+   <version>2.9.2</version>
+</dependency>
+<!-- https://mvnrepository.com/artifact/io.springfox/springfox-swagger-ui -->
+<dependency>
+   <groupId>io.springfox</groupId>
+   <artifactId>springfox-swagger-ui</artifactId>
+   <version>2.9.2</version>
+</dependency>
+```
+
+编写配置类
+
+```java
+package com.rainsun.yuqing.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import springfox.documentation.builders.ApiInfoBuilder;
+import springfox.documentation.builders.PathSelectors;
+import springfox.documentation.builders.RequestHandlerSelectors;
+import springfox.documentation.service.ApiInfo;
+import springfox.documentation.service.Contact;
+import springfox.documentation.spi.DocumentationType;
+import springfox.documentation.spring.web.plugins.Docket;
+import springfox.documentation.swagger2.annotations.EnableSwagger2;
+
+
+@Configuration // 标明是配置类
+@EnableSwagger2 //开启swagger功能
+public class SwaggerConfig {
+    @Bean
+    public Docket createRestApi() {
+        return new Docket(DocumentationType.SWAGGER_2)
+                .apiInfo(apiInfo()) // 用于生成API信息
+                .select() // select()函数返回一个ApiSelectorBuilder实例,用来控制接口被swagger做成文档
+                .apis(RequestHandlerSelectors.basePackage("com.rainsun.yuqing.controller"))
+                //.withClassAnnotation(RestController.class) // 扫描带有指定注解的类下所有接口
+                //.withMethodAnnotation(PostMapping.class) // 扫描带有只当注解的方法接口
+                //.apis(RequestHandlerSelectors.any()) // 扫描所有
+
+                // 选择所有的API,如果你想只为部分API生成文档，可以配置这里
+                .paths(PathSelectors.any()// any() // 满足条件的路径，该断言总为true
+                        //.none() // 不满足条件的路径，该断言总为false（可用于生成环境屏蔽 swagger）
+                        //.ant("/user/**") // 满足字符串表达式路径
+                        //.regex("") // 符合正则的路径
+                )
+                .build();
+    }
+
+    /**
+     * 用于定义API主界面的信息，比如可以声明所有的API的总标题、描述、版本
+     * @return
+     */
+    private ApiInfo apiInfo() {
+
+        Contact contact = new Contact(
+                "YuqingXiong", // 作者姓名
+                "https://blog.csdn.net/", // 作者网址
+                "rainsun@xxx.com"); // 作者邮箱
+
+        return new ApiInfoBuilder()
+                .title("MatchProject项目API") //  可以用来自定义API的主标题
+                .description("MatchProject项目SwaggerAPI管理") // 可以用来描述整体的API
+                .termsOfServiceUrl("https://github.com/YuqingXiong") // 用于定义服务的域名（跳转链接）
+                .version("1.0") // 可以用来定义版本
+                .license("Swagger-的使用")
+                .licenseUrl("https://blog.csdn.net")
+                .contact(contact)
+                .build();
+    }
+}
+```
+
+springboot3.0和swagger2+不兼容
+
+## knif4j
+
+[Spring Boot3整合knife4j(swagger3)_springboot3 knife4j-CSDN博客](https://blog.csdn.net/qq_62262918/article/details/135761392)
+
+```xml
+ <dependency>
+    <groupId>com.github.xiaoymin</groupId>
+    <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+    <version>4.4.0</version>
+</dependency>
+```
+
+```yaml
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+# springdoc-openapi项目配置
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.rainsun.yuqing
+# knife4j的增强配置，不需要增强可以不配
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+```
+
+启动后访问：
+
+对于swagger
+
+- 访问：`http://server:port/context-path/swagger-ui.html`
+
+- 实际上访问的就是：`http://localhost:8080/api/swagger-ui/index.html`
+
+对于 Knife4j（默认doc.html）
+
+- 实际访问：`http://localhost:8080/api/doc.html`
+
+> 注意：要加上前缀 /api 
+
+![image-20240409163412230](https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202404091634427.png)
+
+## 防止接口文档暴露
+
+当前yaml配置文件在 dev 环境下生效：
+
+<img src="https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202404092155505.png" alt="image-20240409215548421" style="zoom:50%;" />
+
+设置Profile注解，使得接口文档只在dev环境下才注入bean。开发环境下不注入则无法访问接口文档
+
+```java
+@Configuration
+@Profile("dev")
+public class Knife4jConfig {
+    @Bean
+    public OpenAPI springShopOpenApi() {
+        return new OpenAPI()
+                // 接口文档标题
+                .info(new Info().title("MatchProject")
+                // 接口文档简介
+                .description("这是基于Knife4j OpenApi3的测试接口文档")
+                // 接口文档版本
+                .version("1.0版本")
+                // 开发者联系方式
+                .contact(new Contact().name("rainsun")
+                        .email("000000000@qq.com")));
+
+    }
+}
+```
+
+
+
+# 数据导入
+
+1. 爬虫
+2. Excel 导入
+
+## Excel 导入
+
+使用 easyexcel 库导入 excel 数据：[必读 | Easy Excel (alibaba.com)](https://easyexcel.opensource.alibaba.com/qa/)
+
+### 准备：
+
+定义对象的每个属性与Excel表中每一列的对应关系
+
+```java
+package com.rainsun.yuqing.once;
+
+import com.alibaba.excel.annotation.ExcelProperty;
+import lombok.Data;
+
+@Data
+public class FriendTableUserInfo {
+    @ExcelProperty("成员编号")
+    private String planetCode;
+    @ExcelProperty("成员昵称")
+    private String username;
+}
+```
+
+### 读取模式1：监听器
+
+监听器定义：
+
+```java
+package com.rainsun.yuqing.once;
+
+import com.alibaba.excel.context.AnalysisContext;
+import com.alibaba.excel.read.listener.ReadListener;
+import lombok.extern.slf4j.Slf4j;
+
+// 有个很重要的点 DemoDataListener 不能被spring管理，要每次读取excel都要new,然后里面用到spring可以构造方法传进去
+@Slf4j
+public class TableListener implements ReadListener<FriendTableUserInfo> {
+
+    /**
+     * 这个每一条数据解析都会来调用
+     *
+     * @param data    one row value. Is is same as {@link AnalysisContext#readRowHolder()}
+     * @param context
+     */
+    @Override
+    public void invoke(FriendTableUserInfo data, AnalysisContext context) {
+        System.out.println(data);
+    }
+
+    /**
+     * 所有数据解析完成了 都会来调用
+     *
+     * @param context
+     */
+    @Override
+    public void doAfterAllAnalysed(AnalysisContext context) {
+        System.out.println("已解析完成");
+    }
+}
+```
+
+### 读取模式2：同步读
+
+不创建监听器，一次读取完整的数据。
+
+操作简单，但一次读的数据量太大会造成等待时间过长，而且一次性读出的数据都会存在内存中可能造成内存溢出
+
+### 测试：
+
+```java
+package com.rainsun.yuqing.once;
+
+import com.alibaba.excel.EasyExcel;
+import java.util.List;
+
+
+public class ImportExcel {
+    public static void main(String[] args) {
+        String fileName = "D:\\CodeProject\\Java\\MatchProject\\rainsun-backend\\src\\main\\resources\\testExcel.xlsx";
+//        readByListener(fileName);
+        synchronousRead(fileName);
+    }
+
+    /**
+     * 1. 监听器读，每次读一行就会调用监听器
+     * @param fileName
+     */
+    public static void readByListener(String fileName){
+        EasyExcel
+                .read(fileName, FriendTableUserInfo.class, new TableListener())
+                .sheet().doRead();
+    }
+
+
+    /**
+     * 2. 同步的返回 如果数据量大会把数据放到内存里面
+     */
+    public static void synchronousRead(String fileName) {
+        // 这里 需要指定读用哪个class去读，然后读取第一个sheet 同步读取会自动finish
+        List<FriendTableUserInfo> totalList = EasyExcel.read(fileName).head(FriendTableUserInfo.class).sheet().doReadSync();
+        for(FriendTableUserInfo userInfo : totalList){
+            System.out.println(userInfo);
+        }
+    }
+}
+```
 
 
 

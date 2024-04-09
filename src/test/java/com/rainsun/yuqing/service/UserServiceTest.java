@@ -1,7 +1,6 @@
 package com.rainsun.yuqing.service;
 
 import com.rainsun.yuqing.model.domain.User;
-import org.junit.Assert;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -10,6 +10,8 @@ import com.rainsun.yuqing.model.domain.request.UserLoginRequest;
 import com.rainsun.yuqing.model.domain.request.UserRegisterRequest;
 import com.rainsun.yuqing.service.UserService;
 import com.rainsun.yuqing.utils.ResultUtils;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.lang3.StringUtils;
@@ -24,6 +26,7 @@ import java.util.stream.Collectors;
  * @author rainsun
  */
 @RestController
+@Tag(name="用户接口")
 @RequestMapping("/user")
 public class UserController {
 
@@ -31,6 +34,7 @@ public class UserController {
     private UserService userService;
 
     @PostMapping("/register")
+    @Operation(summary = "用户列表")
     public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest){
         if(userRegisterRequest == null){
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
