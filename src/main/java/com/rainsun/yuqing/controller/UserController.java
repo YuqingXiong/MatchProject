@@ -1,6 +1,7 @@
 package com.rainsun.yuqing.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.fasterxml.jackson.databind.ser.Serializers;
 import com.rainsun.yuqing.common.BaseResponse;
 import com.rainsun.yuqing.common.ErrorCode;
 import com.rainsun.yuqing.constant.UserConstant;
@@ -92,7 +93,7 @@ public class UserController {
     @GetMapping("/search")
     public BaseResponse<List<User>> searchUsers(String username, HttpServletRequest request){
         // 鉴权：仅管理员可查询
-        if(!isAdmin(request)){
+        if(!userService.isAdmin(request)){
             throw new BusinessException(ErrorCode.NO_AUTH, "非管理员用户");
         }
 
@@ -116,38 +117,45 @@ public class UserController {
         return ResultUtils.success(userList);
     }
 
+    @PostMapping("/update")
+    public BaseResponse<Integer> updateUser(@RequestBody User user, HttpServletRequest request){
+        // 校验参数
+        if(user == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        // todo: 如果用户仅仅传递了 id，其他内容为空，没有更新内容则直接返回
+
+        // 校验参数
+        User loginUser = userService.getLoginUser(request);
+        // 触发更新
+        Integer result = userService.updateUser(user, loginUser);
+        return ResultUtils.success(result);
+    }
+
     @PostMapping("/delete/{id}")
     public BaseResponse<Boolean> deleteUser(@PathVariable Long id, HttpServletRequest request){
         if(id < 0){
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        if(!isAdmin(request)){
+        if(!userService.isAdmin(request)){
             throw new BusinessException(ErrorCode.NO_AUTH, "非管理员用户");
         }
         boolean result = userService.removeById(id);
         return ResultUtils.success(result);
     }
 
-    @PostMapping("/update")
-    public BaseResponse<Boolean> updateUser(@RequestBody User user, HttpServletRequest request){
-        if(user == null || user.getId() < 0){
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
-        if(!isAdmin(request)){
-            throw new BusinessException(ErrorCode.NO_AUTH, "非管理员用户");
-        }
-        boolean result = userService.updateById(user);
-        return ResultUtils.success(result);
-    }
-
     /**
-     * 是否为管理员
-     * @param request
-     * @return
+     * 用于用户中心项目的用户更改
      */
-    public boolean isAdmin(HttpServletRequest request){
-        // 鉴权：仅管理员可操作
-        User userObject = (User)request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);
-        return userObject != null && userObject.getUserRole() == UserConstant.ADMIN_ROLE;
-    }
+//    @PostMapping("/update")
+//    public BaseResponse<Boolean> updateUserById(@RequestBody User user, HttpServletRequest request){
+//        if(user == null || user.getId() < 0){
+//            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+//        }
+//        if(!userService.isAdmin(request)){
+//            throw new BusinessException(ErrorCode.NO_AUTH, "非管理员用户");
+//        }
+//        boolean result = userService.updateById(user);
+//        return ResultUtils.success(result);
+//    }
 }

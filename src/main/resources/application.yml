@@ -18,11 +18,15 @@ spring:
       port: 6379
       host: 192.168.137.133
       database: 0
+      connect-timeout: 5000
 
 server:
   port: 8080
   servlet:
     context-path: /api
+    session:
+      cookie:
+        domain: localhost
 
 mybatis-plus:
   configuration:

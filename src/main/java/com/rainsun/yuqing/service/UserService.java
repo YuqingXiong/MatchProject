@@ -1,5 +1,6 @@
 package com.rainsun.yuqing.service;
 
+import com.rainsun.yuqing.constant.UserConstant;
 import com.rainsun.yuqing.model.domain.User;
 import com.baomidou.mybatisplus.extension.service.IService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -46,4 +47,26 @@ public interface UserService extends IService<User> {
     int userLogout(HttpServletRequest request);
 
     List<User> searchUserByTags(List<String> tagNameList);
+
+    /**
+     * 更新用户信息
+     * @param user
+     * @return
+     */
+    Integer updateUser(User user, User loginUser);
+
+    /**
+     * 获取登录了的用户信息
+     * @return
+     */
+    User getLoginUser(HttpServletRequest request);
+
+    boolean isAdmin(User loginUser);
+
+    /**
+     * 是否为管理员
+     * @param request
+     * @return
+     */
+    public boolean isAdmin(HttpServletRequest request);
 }

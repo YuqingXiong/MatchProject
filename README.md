@@ -207,7 +207,7 @@ public BaseResponse<List<User>> searchUserByTags(@RequestParam(required=false) L
 
 ![image-20240417072251458](https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202404170722589.png)
 
-## 分布式
+## 分布式Session登录
 
 ### Session 共享
 
