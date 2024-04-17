@@ -96,6 +96,8 @@ alter table user add COLUMN tags varchar(1024) null comment '标签列表';
 
 ### 搜索标签：
 
+#### Server 层
+
 1. 允许用户传入多个标签，多个标签都存在才搜索出来  and：
 
    like '%Java%' and like '%C++%'
@@ -187,7 +189,49 @@ java json 序列化库有很多：
 - 数据库连接足够，内存空间足够，可以并发同时查询，谁先返回查询结果就用谁
 - SQL 查询与内存查询相结合。先用SQL过滤部分tag
 
+#### Controller 层
 
+```java
+@GetMapping("/search/tags")
+public BaseResponse<List<User>> searchUserByTags(@RequestParam(required=false) List<String> tagNameList){
+    if(CollectionUtils.isEmpty(tagNameList)){
+        throw new BusinessException(ErrorCode.PARAMS_ERROR);
+    }
+    List<User> userList = userService.searchUserByTags(tagNameList);
+
+    return ResultUtils.success(userList);
+}
+```
+
+**添加一个类注解，允许前端跨域访问：**`@CrossOrigin(origins = {"http://localhost:5173/"})`
+
+![image-20240417072251458](https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202404170722589.png)
+
+## 分布式
+
+### Session 共享
+
+当有多个后台时，在其中一个后台A登录后，A中的session记录了用户信息，但是后台B并没有该用户的信息，就需要用户重复登录：
+
+<img src="https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202404170726945.png" alt="image-20240417072600626" style="zoom:50%;" />
+
+为了解决这个问题，我们需要共享 Session：
+
+<img src="https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202404170726903.png" alt="image-20240417072639796" style="zoom:50%;" />
+
+所以需要共享存储， 不能将数据放在单个后台的内存中
+
+共享存储的方法：
+
+1. Redis (基于K,V的数据库)。
+2. MySQL
+3. 文件服务器 ceph
+
+这里使用 Redis 实现：用户信息读取/是否登录的判断很频繁，而 Redis 基于内存，读写性能高，简单数据的 QPS 可以达到 5W-10W
+
+### Redis 实现
+
+https://blog.csdn.net/qq_45364953/article/details/137869498
 
 # 生成接口文档
 

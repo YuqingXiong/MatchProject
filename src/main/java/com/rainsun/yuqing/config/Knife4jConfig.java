@@ -26,6 +26,5 @@ public class Knife4jConfig {
                 // 开发者联系方式
                 .contact(new Contact().name("rainsun")
                         .email("000000000@qq.com")));
-
     }
 }

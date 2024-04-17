@@ -9,12 +9,15 @@ import com.rainsun.yuqing.model.domain.User;
 import com.rainsun.yuqing.model.domain.request.UserLoginRequest;
 import com.rainsun.yuqing.model.domain.request.UserRegisterRequest;
 import com.rainsun.yuqing.service.UserService;
+import com.rainsun.yuqing.service.impl.UserServiceImpl;
 import com.rainsun.yuqing.utils.ResultUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.xmlbeans.impl.xb.xsdschema.Attribute;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,6 +31,7 @@ import java.util.stream.Collectors;
 @RestController
 @Tag(name="用户接口")
 @RequestMapping("/user")
+@CrossOrigin(origins = {"http://localhost:5173/"})
 public class UserController {
 
     @Resource
@@ -100,6 +104,16 @@ public class UserController {
 
         List<User> list = userList.stream().map(user -> userService.getSaftetyUser(user)).collect(Collectors.toList());
         return ResultUtils.success(list);
+    }
+
+    @GetMapping("/search/tags")
+    public BaseResponse<List<User>> searchUserByTags(@RequestParam(required=false) List<String> tagNameList){
+        if(CollectionUtils.isEmpty(tagNameList)){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        List<User> userList = userService.searchUserByTags(tagNameList);
+
+        return ResultUtils.success(userList);
     }
 
     @PostMapping("/delete/{id}")
