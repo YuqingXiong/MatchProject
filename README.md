@@ -207,6 +207,80 @@ public BaseResponse<List<User>> searchUserByTags(@RequestParam(required=false) L
 
 ![image-20240417072251458](https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202404170722589.png)
 
+## 首页推荐展示
+
+首先，简单实现是搜索所有用户 list 列表 返回给前端：
+
+```java
+@GetMapping("/recommend")
+public BaseResponse<List<User>> recommendUsers(HttpServletRequest request){
+    QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+    List<User> userList = userService.list(queryWrapper);
+    List<User> list = userList.stream().map(user -> userService.getSaftetyUser(user)).collect(Collectors.toList());
+    return ResultUtils.success(list);
+}
+```
+
+但是当用户量增多，这样就很慢，需要查询和传递很多数据。
+
+优化：由于前端展示数据的数量是有限制的，一个屏幕放不了所有数据，所以可以分页返回数据
+
+### 分页展示
+
+使用 MyBatisPlus 的分页接口
+
+首先需要配置 MyBatisPlus 的拦截器，添加一个分页拦截器
+
+```java
+
+import com.baomidou.mybatisplus.annotation.DbType;
+import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
+import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * MyBatisPlus 配置
+ *
+ */
+@Configuration
+@MapperScan("com.rainsun.yuqing.mapper")
+public class MybatisPlusConfig {
+
+    /**
+     * 新的分页插件,一缓和二缓遵循mybatis的规则,需要设置 MybatisConfiguration#useDeprecatedExecutor = false 避免缓存出现问题(该属性会在旧插件移除后一同移除)
+     */
+    @Bean
+    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+        MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
+        return interceptor;
+    }
+}
+```
+
+使用分页：
+
+```java
+@GetMapping("/recommend")
+public BaseResponse<Page<User>> recommendUsers(long pageSize, long pageNum, HttpServletRequest request){
+    QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+    Page<User> userList = userService.page(new Page<>(pageNum, pageSize), queryWrapper);
+    return ResultUtils.success(userList);
+}
+```
+
+## 定时预加载缓存-加快首页加载
+
+首页查询用户展示即使分页了也很慢，需要几秒钟。
+
+**缓存** ：查询数据库很慢，所以可以先预先把数据查出来，放在一个更快读取的地方，就可以不用查数据库了，这个更改读取的地方就是缓存。
+
+**定时任务：**预加载缓存，定时更新缓存。
+
+**分布式锁：**如果有多个机器(后台)都要执行这个定时任务吗？并不是。（分布式锁：需要控制同一时间只有一台机器去执行定时任务，其他机器不用重复执行）
+
 ## 分布式Session登录
 
 ### Session 共享
@@ -412,7 +486,7 @@ public class Knife4jConfig {
 1. 爬虫
 2. Excel 导入
 
-## Excel 导入
+## 读取 Excel 数据到内存 
 
 使用 easyexcel 库导入 excel 数据：[必读 | Easy Excel (alibaba.com)](https://easyexcel.opensource.alibaba.com/qa/)
 
@@ -519,7 +593,334 @@ public class ImportExcel {
 }
 ```
 
+## 插入新用户
 
+1,xiongyuqing,sun123,https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg,0,xxx,123,123,0,2024-01-22 17:12:34,2024-01-26 14:15:12,0,1,,"[""java"", ""c++"", ""python""]",
+2,testRain,testRain,https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg,0,77f3939521f9f8df6dbe4430211e2b2c,123,456,0,2024-01-23 10:25:05,2024-04-07 15:30:43,0,0,2,"[""java"", ""c++"", ""python""]",
+3,xiongyuqing,rainsun,https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg,0,77f3939521f9f8df6dbe4430211e2b2c,123,456,0,2024-01-23 10:25:19,2024-01-24 17:09:31,0,1,3,"[""男"", ""java""]",
+4,rain,rain,https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg,1,77f3939521f9f8df6dbe4430211e2b2c,123,456,0,2024-01-24 15:59:46,2024-01-25 10:46:45,0,1,1,"[""女"", ""java""]",
+7,testRain,rain123,https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg,0,xxx,123,456,0,2024-01-26 16:22:50,2024-01-26 16:22:50,0,0,4,"[""男"", ""python""]",""
+8,testRain,xyq123,https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg,0,xxx,123,456,0,2024-01-26 16:30:51,2024-01-26 16:30:51,0,0,5,"[""女"", ""python""]",
+
+### 编写一次性任务
+
+for 循环插入数据的问题：
+
+1. 建立和释放数据库链接（批量查询解决）
+2. for 循环是绝对线性的，依次插入的。（多线程插入）
+
+#### 单线程执行
+
+xxxApplication类上使用 `@EnableScheduling` 再给某个函数加上`@Schedued(xxxx,xx)` 注解，可以定时执行该函数
+
+这里暂时在Test里执行：
+
+```java
+package com.rainsun.yuqing.service;
+
+import com.rainsun.yuqing.mapper.UserMapper;
+import com.rainsun.yuqing.model.domain.User;
+import jakarta.annotation.Resource;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.util.StopWatch;
+
+@SpringBootTest
+public class InsertUserTest {
+    @Resource
+    private UserMapper userMapper;
+
+    /**
+     * 批量插入用户
+     */
+    @Test
+    public void doInsertUsers(){
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        final int INSERT_NUM = 1000;
+        for(int i = 0; i < INSERT_NUM; ++i){
+            User user = new User();
+            user.setUsername("朋友用户");
+            user.setUserAccount("friendUser");
+            user.setAvatarUrl("https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg");
+            user.setGender(0);
+            user.setUserPassword("12345678");
+            user.setPhone("12345678910");
+            user.setEmail("123@qq.com");
+            user.setUserStatus(0);
+            user.setUserRole(0);
+            user.setPlanetCode("1111111");
+            user.setTags("[]");
+            userMapper.insert(user);
+        }
+        stopWatch.stop();
+        System.out.println(stopWatch.getTotalTimeMillis());
+    }
+}
+```
+
+但是这样太慢了。
+
+可以看到 mysql 在插入数据的时候，需要建立一个 SqlSession ，插入数据后，再Closing 这个Session。
+
+![image-20240418224545571](https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202404182245666.png)
+
+每一条数据都需要这么建立连接又断开就非常慢，所以这里 mybatis 提供了批量插入的接口，建立一个session，批量插入多个数据：
+
+```java
+package com.rainsun.yuqing.service;
+
+import com.rainsun.yuqing.mapper.UserMapper;
+import com.rainsun.yuqing.model.domain.User;
+import jakarta.annotation.Resource;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.util.StopWatch;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@SpringBootTest
+public class InsertUserTest {
+    @Resource
+    private UserService userService;
+
+    /**
+     * 批量插入用户
+     */
+    @Test
+    public void doInsertUsers(){
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        final int INSERT_NUM = 1000;
+        List<User> userList = new ArrayList<>();
+        for(int i = 0; i < INSERT_NUM; ++i){
+            User user = new User();
+            user.setUsername("朋友用户");
+            user.setUserAccount("friendUser");
+            user.setAvatarUrl("https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg");
+            user.setGender(0);
+            user.setUserPassword("12345678");
+            user.setPhone("12345678910");
+            user.setEmail("123@qq.com");
+            user.setUserStatus(0);
+            user.setUserRole(0);
+            user.setPlanetCode("1111111");
+            user.setTags("[]");
+            userList.add(user);
+        }
+        userService.saveBatch(userList, 100);
+        stopWatch.stop();
+        System.out.println(stopWatch.getTotalTimeMillis());
+    }
+}
+```
+
+![image-20240418225119248](https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202404182251329.png)
+
+#### 多线程并发
+
+CompletableFuture 定义一个任务数组，每个插入的分组是一个任务，将任务数组交给多个线程执行
+
+线程池不定义的话采用默认线程池，线程数是CPU核数
+
+```java
+package com.rainsun.yuqing.service;
+
+import com.rainsun.yuqing.mapper.UserMapper;
+import com.rainsun.yuqing.model.domain.User;
+import jakarta.annotation.Resource;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.util.StopWatch;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+@SpringBootTest
+public class InsertUserTest {
+    @Resource
+    private UserService userService;
+
+    /**
+     * 批量插入用户
+     */
+    @Test
+    public void doInsertUsers(){
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        final int INSERT_NUM = 1000;
+        List<User> userList = new ArrayList<>();
+        for(int i = 0; i < INSERT_NUM; ++i){
+            User user = new User();
+            user.setUsername("朋友用户");
+            user.setUserAccount("friendUser");
+            user.setAvatarUrl("https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg");
+            user.setGender(0);
+            user.setUserPassword("12345678");
+            user.setPhone("12345678910");
+            user.setEmail("123@qq.com");
+            user.setUserStatus(0);
+            user.setUserRole(0);
+            user.setPlanetCode("1111111");
+            user.setTags("[]");
+            userList.add(user);
+        }
+        userService.saveBatch(userList, 100);
+        stopWatch.stop();
+        System.out.println(stopWatch.getTotalTimeMillis());
+    }
+
+    /**
+     * 并发批量插入用户
+     */
+    @Test
+    public void doConcurrencyInsertUsers(){
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        final int INSERT_NUM = 1000;
+        final int INSERT_GROUP_NUM = 100;
+        int j = 0;
+        // 任务数组
+        List<CompletableFuture<Void>> futureList = new ArrayList<>();
+        for(int i = 0; i < 10; ++ i){
+            List<User> userList = new ArrayList<>();
+            do {
+                ++j;
+                User user = new User();
+                user.setUsername("朋友用户");
+                user.setUserAccount("friendUser");
+                user.setAvatarUrl("https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg");
+                user.setGender(0);
+                user.setUserPassword("12345678");
+                user.setPhone("12345678910");
+                user.setEmail("123@qq.com");
+                user.setUserStatus(0);
+                user.setUserRole(0);
+                user.setPlanetCode("1111111");
+                user.setTags("[]");
+                userList.add(user);
+            }while(j % 100 != 0);
+            // 异步执行
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                userService.saveBatch(userList, INSERT_GROUP_NUM);
+            });
+            // 加入到任务数组
+            futureList.add(future);
+        }
+        // 等待所有异步任务完成
+        CompletableFuture.allOf(futureList.toArray(new CompletableFuture[]{})).join();
+        stopWatch.stop();
+        System.out.println(stopWatch.getTotalTimeMillis());
+    }
+}
+```
+
+##### 自定义线程池
+
+设置线程池的核心线程数大小，最大数量，等待时间，等待队列长度，（拒绝策略）
+
+根据任务类型设置线程池的核心线程数：
+
+- CPU密集型：分配核心线程数 = CPU - 1
+- IO 密集型：分配核心线程数 大于 CPU 核数
+
+```java
+package com.rainsun.yuqing.service;
+
+import com.rainsun.yuqing.mapper.UserMapper;
+import com.rainsun.yuqing.model.domain.User;
+import jakarta.annotation.Resource;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.util.StopWatch;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+
+@SpringBootTest
+public class InsertUserTest {
+    @Resource
+    private UserService userService;
+
+    private ExecutorService executorService = new ThreadPoolExecutor(60, 1000, 10000, TimeUnit.MINUTES, new ArrayBlockingQueue<>(10000));
+
+    /**
+     * 批量插入用户
+     */
+    @Test
+    public void doInsertUsers(){
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        final int INSERT_NUM = 1000;
+        List<User> userList = new ArrayList<>();
+        for(int i = 0; i < INSERT_NUM; ++i){
+            User user = new User();
+            user.setUsername("朋友用户");
+            user.setUserAccount("friendUser");
+            user.setAvatarUrl("https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg");
+            user.setGender(0);
+            user.setUserPassword("12345678");
+            user.setPhone("12345678910");
+            user.setEmail("123@qq.com");
+            user.setUserStatus(0);
+            user.setUserRole(0);
+            user.setPlanetCode("1111111");
+            user.setTags("[]");
+            userList.add(user);
+        }
+        userService.saveBatch(userList, 100);
+        stopWatch.stop();
+        System.out.println(stopWatch.getTotalTimeMillis());
+    }
+
+    /**
+     * 并发批量插入用户
+     */
+    @Test
+    public void doConcurrencyInsertUsers(){
+        StopWatch stopWatch = new StopWatch();
+        stopWatch.start();
+        final int INSERT_NUM = 10000;
+        final int BATCH_SIZE = 1000;
+        int j = 0;
+        // 任务数组
+        List<CompletableFuture<Void>> futureList = new ArrayList<>();
+        for(int i = 0; i < 20; ++ i){
+            List<User> userList = new ArrayList<>();
+            do {
+                ++j;
+                User user = new User();
+                user.setUsername("朋友用户");
+                user.setUserAccount("friendUser");
+                user.setAvatarUrl("https://xiongyuqing-img.oss-cn-qingdao.aliyuncs.com/img/202401231713002.jpg");
+                user.setGender(0);
+                user.setUserPassword("12345678");
+                user.setPhone("12345678910");
+                user.setEmail("123@qq.com");
+                user.setUserStatus(0);
+                user.setUserRole(0);
+                user.setPlanetCode("1111111");
+                user.setTags("[]");
+                userList.add(user);
+            }while(j % BATCH_SIZE != 0);
+            // 异步执行
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                System.out.println("threadName: " + Thread.currentThread().getName());
+                userService.saveBatch(userList, BATCH_SIZE);
+            }, executorService);
+            // 加入到任务数组
+            futureList.add(future);
+        }
+        // 等待所有异步任务完成
+        CompletableFuture.allOf(futureList.toArray(new CompletableFuture[]{})).join();
+        stopWatch.stop();
+        System.out.println(stopWatch.getTotalTimeMillis());
+    }
+}
+```
 
 
 
